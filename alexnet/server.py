@@ -27,7 +27,7 @@ def cal_md5(file_path):
 def unpack_file_info(file_info):
     file_name, file_name_len, file_size, md5 = struct.unpack(HEAD_STRUCT, file_info)
     file_name = file_name[:file_name_len]
-    return file_name, file_size, md5
+    return file_name.decode(), file_size, md5
 
 class server(threading.Thread):
     def __init__(self):
@@ -66,44 +66,55 @@ class server(threading.Thread):
         print(isready)
         s.send(b"Server: READY to receive the File Information")
 
-        # Check the file to transfer
-        datasize = 0
-        file_info = s.recv(info_size)
-        file_name, file_size, md5_recv = unpack_file_info(file_info)
-        datasize = file_size
-        s.send(b"Server: READY to receive the File")
+        receive_path = "./receive"
+        image_list = []
+        file_num = s.recv(BUFFER_SIZE)
+        file_count = int.from_bytes(file_num, byteorder='big', signed = False)
+        print("File num: ",file_num, "/",file_count)
+        while file_count > 0:
+            file_count -= 1
 
-        # Receive data from client 
-        received_size = 0
-        with open("receive/002689.jpg", 'wb') as fw:
-            while received_size < file_size:
-                # print received_size
-                remained_size = file_size - received_size
-                recv_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
-                recv_file = s.recv(recv_size)
-                s.send(b"Server: OK")
-                received_size += recv_size
-                fw.write(recv_file)
-            fw.close()
-        md5 = cal_md5("receive/002689.jpg")
-        if md5 != md5_recv:
-            print("Server: MD5 compared fail!")
-        else:
-            print("Server: Received successfully")
+            # Check the file to transfer 
+            file_info = s.recv(info_size)
+            file_name, file_size, md5_recv = unpack_file_info(file_info)
+            image_list.append(file_name)
+            s.send(b"Server: Received file information")
+
+            # Receive data from client 
+            received_size = 0
+            with open(receive_path+'/'+file_name,'wb') as fw:
+                while received_size < file_size:
+                    # print received_size
+                    remained_size = file_size - received_size
+                    recv_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
+                    recv_file = s.recv(recv_size)
+                    s.send(b"Server: OK")
+                    received_size += recv_size
+                    fw.write(recv_file)
+                fw.close()
+            # md5 = cal_md5(receive_path+'/'+file_name)
+            # if md5 != md5_recv:
+            #     print("Server: {} MD5 compared fail!".format(file_name))
+            #     s.send(b"No")
+            # else:
+            #     print("Server: Received {} successfully".format(file_name))
+            #     s.send(b"OK")
+            print("Server: Received {} successfully".format(file_name))
+            s.send(b"OK")
 
         # Run AlexNet and collect the result
-        imagePath = "./receive"
-        imageName = [
-            "002689.jpg"
-        ]
-        withPath = lambda imgName: '{}/{}'.format(imagePath,imgName)
-        testImg = dict((imgName,cv2.imread(withPath(imgName))) for imgName in imageName)
-                
-        for key,img in testImg.items(): 
+        # withPath = lambda imgName: '{}/{}'.format(receive_path,image_list)
+        testImg = dict((imgName,cv2.imread(receive_path+'/'+imgName)) for imgName in image_list)
+        # print(testImg)
+
+        for imgName,img in testImg.items(): 
             resized = cv2.resize(img.astype(np.float), (227, 227)) - self.imgMean
             maxx = np.argmax(self.sess.run(self.softmax, feed_dict = {self.x: resized.reshape((1, 227, 227, 3))}))
+            # maxx = 0 # for test use
             result = caffe_classes.class_names[maxx]
-            print("{}: {}\n----".format(key,result))
+            print("{}: {}\n----".format(imgName,result))
+            s.send(bytes(imgName.encode('utf-8')))
+            s.recv(2)
             s.send(bytes(result.encode('utf-8')))
         s.close()
 
@@ -111,7 +122,7 @@ class server(threading.Thread):
 if __name__ == '__main__':
     print("Server: Test start...")
     s = server()
-    ip = "192.168.1.199"
-    # ip = "127.0.0.1"
+    # ip = "192.168.1.199"
+    ip = "127.0.0.1"
     port = 50000
     s.run(ip, port)

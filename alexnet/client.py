@@ -20,11 +20,11 @@ def cal_md5(file_path):
         return md5
 
 def get_file_info(file_path):
-    file_name = os.path.basename(file_path)
-    file_name_len = len(file_name)
+    # file_name = os.path.basename(file_path)
+    # file_name_len = len(file_name)
     file_size = os.path.getsize(file_path)
     md5 = cal_md5(file_path)
-    return bytes(file_name.encode('utf-8')), file_name_len, file_size, bytes(md5.encode('utf-8'))
+    return file_size, bytes(md5.encode('utf-8'))
 
 def client(sock, addr):
     print("Client: Accept new connection from %s:%s..." % addr)
@@ -36,30 +36,51 @@ def client(sock, addr):
     print(isready)
 
     # Check the file to transfer
-    file_name, file_name_len, file_size, md5 = get_file_info("testModel/002689.jpg")
-    file_info = struct.pack(HEAD_STRUCT, file_name, file_name_len, file_size, md5)
-    sock.send(file_info)
-    receive_packet = sock.recv(BUFFER_SIZE)
-    print(receive_packet)
-    sent_size = 0
+    image_list = [
+        "000018.jpg",
+        "002689.jpg",
+        "005525.jpg"
+    ]
+    image_path = "./testModel/"
+    image_num = len(image_list)
+    # print("File num: ",len(image_list).to_bytes(4, byteorder='big'),"/",len(image_list))
+    sock.send(image_num.to_bytes(4, byteorder='big'))
+    for image_name in image_list:
+        file_size, md5 = get_file_info(image_path+image_name)
+        file_info = struct.pack(HEAD_STRUCT, bytes(image_name.encode('utf-8')),len(image_name), file_size, md5)
+        sock.send(file_info)
+        receive_packet = sock.recv(BUFFER_SIZE)
+        print(receive_packet)
+        sent_size = 0
 
-    # Send the file
-    with open("testModel/002689.jpg", 'rb') as fr:
-        while sent_size < file_size:
-            remained_size = file_size - sent_size
-            send_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
-            send_file = fr.read(send_size)
-            sent_size += send_size
-            sock.send(send_file)
-            rback = sock.recv(BUFFER_SIZE)
-            print(rback)
-        fr.close()
+        # Send the file
+        with open(image_path+image_name, 'rb') as img:
+            while sent_size < file_size:
+                remained_size = file_size - sent_size
+                send_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
+                send_file = img.read(send_size)
+                sent_size += send_size
+                sock.send(send_file)
+                rback = sock.recv(BUFFER_SIZE)
+                # print(rback)
+            img.close()
+        
+        reply_packet = sock.recv(2)
+        if reply_packet == b"OK":
+            continue
+        else:
+            print("Connection ERROR.\nCurrent file:",image_name)
+            break
+
 
     # Receive the result from the server
-    result = sock.recv(BUFFER_SIZE)
-    print(result)
+    for i in range(image_num):
+        imgName = sock.recv(BUFFER_SIZE)
+        sock.send(b"OK")
+        result = sock.recv(BUFFER_SIZE)
+        print("{}: {}\n----".format(imgName,result))
+    
     sock.close()
-
 
 
 if __name__ == '__main__':
