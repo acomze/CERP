@@ -6,10 +6,12 @@ import os
 import argparse
 import sys
 import alexnet
-import cv2
+# import cv2
 import tensorflow as tf
 import numpy as np
 import caffe_classes
+from PIL import Image
+# import matplotlib.pyplot as plt
 
 # define different layer functions
 # we usually don't do convolution and pooling on batch and channel
@@ -109,13 +111,17 @@ class alexNet(object):
                             sess.run(tf.get_variable('w', trainable = False).assign(p))
 
 def main():
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
     imagePath = "./testImages"
     imageName = [
         "000001.jpg"
     ]
 
     withPath = lambda imgName: '{}/{}'.format(imagePath,imgName)
-    testImg = dict((imgName,cv2.imread(withPath(imgName))) for imgName in imageName)
+    # testImg = dict((imgName,cv2.imread(withPath(imgName))) for imgName in imageName)
+    testImg = dict((imgName,Image.open(withPath(imgName)) ) for imgName in imageName)
 
     # noinspection PyUnboundLocalVariable
     if testImg.values():
@@ -138,8 +144,10 @@ def main():
             model.loadModel(sess)
 
             for key,img in testImg.items():
+                print(img)
                 #img preprocess
-                resized = cv2.resize(img.astype(np.float), (227, 227)) - imgMean
+                # resized = cv2.resize(img.astype(np.float), (227, 227)) - imgMean
+                resized = np.array(img.resize((227, 227))) - imgMean
                 maxx = np.argmax(sess.run(softmax, feed_dict = {x: resized.reshape((1, 227, 227, 3))}))
                 res = caffe_classes.class_names[maxx]
 

@@ -55,6 +55,7 @@ def client(sock, addr):
 
         # Send the file
         with open(image_path+image_name, 'rb') as img:
+            time0 = time.time()
             while sent_size < file_size:
                 remained_size = file_size - sent_size
                 send_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
@@ -64,7 +65,9 @@ def client(sock, addr):
                 rback = sock.recv(BUFFER_SIZE)
                 # print(rback)
             img.close()
-        
+            time1 = time.time()
+            print("**************TIME:{}**************".format(time1-time0))
+
         reply_packet = sock.recv(2)
         if reply_packet == b"OK":
             continue
@@ -81,17 +84,23 @@ def client(sock, addr):
         print("{}: {}\n----".format(imgName,result))
     
     sock.close()
+    return 
 
 
 if __name__ == '__main__':
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     ip = "0.0.0.0"
+    # ip = "127.0.0.1"
     # ip = "192.168.26.66"
     port = 50000
     s.bind((ip, port))    
     s.listen(1)
-    print("Waiting for connection...")
+    print("Client: Waiting for connection...")
     while True:
         sock, addr = s.accept()
         t = threading.Thread(target=client, args=(sock, addr))
         t.start()
+        time.sleep(3)
+        print("Client: Stop the connection.")
+        break
+        

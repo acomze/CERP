@@ -5,12 +5,13 @@ import hashlib
 import struct
 # import dill
 import os
-import cv2
+# import cv2
 import caffe_classes
 import numpy as np
 import tensorflow as tf
 # import prettytable as pt
 import alexnet
+from PIL import Image
 
 
 BUFFER_SIZE = 1024
@@ -52,13 +53,14 @@ class server(threading.Thread):
         model.loadModel(self.sess)
 
 
-    def run(self, ip = "127.0.0.1", port = 500000):
+    def run(self, ip = "127.0.0.1", port = 50000):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             s.connect((ip, port))            
             print("Server: Connection Succeed")
-        except:
+        except Exception as e:
             print("Server: Connection ERROR")
+            print("Exception: ", repr(e))
             exit()
         
         # Check the connection
@@ -104,11 +106,13 @@ class server(threading.Thread):
 
         # Run AlexNet and collect the result
         # withPath = lambda imgName: '{}/{}'.format(receive_path,image_list)
-        testImg = dict((imgName,cv2.imread(receive_path+'/'+imgName)) for imgName in image_list)
+        # testImg = dict((imgName,cv2.imread(receive_path+'/'+imgName)) for imgName in image_list)
+        testImg = dict((imgName,Image.open(receive_path+'/'+imgName) ) for imgName in image_list)
         # print(testImg)
 
         for imgName,img in testImg.items(): 
-            resized = cv2.resize(img.astype(np.float), (227, 227)) - self.imgMean
+            # resized = cv2.resize(img.astype(np.float), (227, 227)) - self.imgMean
+            resized = np.array(img.resize((227, 227))) - self.imgMean
             maxx = np.argmax(self.sess.run(self.softmax, feed_dict = {self.x: resized.reshape((1, 227, 227, 3))}))
             # maxx = 0 # for test use
             result = caffe_classes.class_names[maxx]
@@ -120,9 +124,14 @@ class server(threading.Thread):
 
 
 if __name__ == '__main__':
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+
     print("Server: Test start...")
     s = server()
-    # ip = "192.168.1.199"
-    ip = "127.0.0.1"
+    # ip = "192.168.1.128" # Raspberry
+    # ip = "192.168.1.101" # Jetson
+    # ip = "192.168.1.199" # Desktop
+    ip = "127.0.0.1" # Local
     port = 50000
     s.run(ip, port)
