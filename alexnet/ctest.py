@@ -44,18 +44,13 @@ def client(sock, addr):
     # ]
     image_path = "./testModel/"
     image_list = list(image_name for image_name in os.listdir(image_path))
-    
-    times = 1
-    count = times
-    image_list *= times
+    image_list = image_list * 100
     image_num = len(image_list)
-    
     # print("File num: ",len(image_list).to_bytes(4, byteorder='big'),"/",len(image_list))
     sock.send(image_num.to_bytes(4, byteorder='big'))
     sumtime = 0
+    time3 = time.time()
     for image_name in image_list:
-        print(count)
-        count -= 1
         file_size, md5 = get_file_info(image_path+image_name)
         file_info = struct.pack(HEAD_STRUCT, bytes(image_name.encode('utf-8')),len(image_name), file_size, md5)
         sock.send(file_info)
@@ -71,13 +66,16 @@ def client(sock, addr):
                 send_size = BUFFER_SIZE if remained_size > BUFFER_SIZE else remained_size
                 send_file = img.read(send_size)
                 sent_size += send_size
+                time5= time.time()
                 sock.send(send_file)
                 rback = sock.recv(BUFFER_SIZE)
+                time6 = time.time()
                 # print(rback)
+                sumtime += (time6 - time5)
             time1 = time.time()
-            sumtime += (time1 - time0)
             img.close()
-        # print("**************BAND:{}**************".format((time1-time0)))
+            # sumtime += (time1 - time0)
+            # print("**************TIME:{}**************".format(time1-time0))
 
         reply_packet = sock.recv(2)
         if reply_packet == b"OK":
@@ -85,14 +83,17 @@ def client(sock, addr):
         else:
             print("Connection ERROR.\nCurrent file:",image_name)
             break
-    # print("**************BAND:{}**************".format((162.+16.1+14.8)*(times/sumtime)))
+
+    time4 = time.time()
+    print("**************AVG TIME:{} MB/s**************".format((16.2+16.1+14.8)*100/(sumtime*1000)))
+    # print("**************AVG TIME:{} MB/s**************".format((16.2+16.1+14.8)*100/((time4-time3)*1000)))
 
     # Receive the result from the server
-    for i in range(image_num):
-        imgName = sock.recv(BUFFER_SIZE)
-        sock.send(b"OK")
-        result = sock.recv(BUFFER_SIZE)
-        print("{}: {}\n----".format(imgName,result))
+    # for i in range(image_num):
+    #     imgName = sock.recv(BUFFER_SIZE)
+    #     sock.send(b"OK")
+    #     result = sock.recv(BUFFER_SIZE)
+    #     print("{}: {}\n----".format(imgName,result))
     
     sock.close()
     return 
