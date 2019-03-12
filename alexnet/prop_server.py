@@ -15,7 +15,6 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 BUFFER_SIZE = 1200
 HEAD_STRUCT = '128sIqi32xs'
-HEAD_INFO = 'fi'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -36,9 +35,9 @@ class FileProcessor():
         return file_name.decode(), file_size, required_index, md5
 
     def get_local_info(self):
-        cpu_percent = psutil.cpu_percent(interval = None)
+        cpu_percent = psutil.cpu_percent(None)
         conn_type = 1
-        local_info = struct.pack(HEAD_INFO, cpu_percent, conn_type)
+        local_info = struct.pack(HEAD_STRUCT, cpu_percent, conn_type)
         return local_info
 
 ###################
@@ -79,7 +78,6 @@ class Server(threading.Thread):
         sock.send(b"Server: Ready")
         # isReady = sock.recv(BUFFER_SIZE)
         # print(isReady)
-        # while True:
         packet_receive = sock.recv(BUFFER_SIZE)
         
         # "Resource query": Proping processs
@@ -141,14 +139,14 @@ class Server(threading.Thread):
                 sock.send(bytes(imgName.encode('utf-8')))
                 sock.recv(2)
                 sock.send(bytes(result.encode('utf-8')))
+            sock.close()
         else:
             print("Server: query invalid")
-
+            return
 
 
 if __name__ == '__main__':
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     # ip = "192.168.1.199"
     # ip = "192.168.26.66"
     ip = "0.0.0.0"
@@ -158,9 +156,7 @@ if __name__ == '__main__':
     server = Server()
     print("Waiting for connection...")
     while True:
-        print("SOCK:",sock)
-        client_sock, addr = sock.accept()
-        # t = threading.Thread(target=server.run, args=(sock, addr))
-        server.run(client_sock, addr)
-        # t.start()
-        client_sock.close()
+        sock, addr = sock.accept()
+        t = threading.Thread(target=server.run, args=(sock, addr))
+        t.start()
+        break

@@ -11,7 +11,6 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 
 BUFFER_SIZE = 1200
 HEAD_STRUCT = '128sIqi32xs'
-HEAD_INFO = 'fi'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -74,7 +73,7 @@ class SendScheduler(threading.Thread):
 ###################        
 class Client(threading.Thread):
     def __init__(self):
-        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
         with open("sprintGo.txt","r") as ulFile:
             self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
@@ -91,74 +90,81 @@ class Client(threading.Thread):
             "127.0.0.1", # Local
         ]
         
+    ## The ip selection model
+    def select_ip(self, ip_info, rtt):
+        cpu_percent, conn_type = struct.unpack(HEAD_STRUCT,ip_info)
+        current_band = self.size_arrange[self.required_index]
+        #
+        #*********************Add your model here**************************
+        #                          YOUR MODEL
+        #******************************************************************
+        #
+        isProp = True
+        return isProp
+
     ## Porping each ip in ip_list
-    def probing(self, ip, port = 50000):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        isReady = self.check_conn(sock, ip, port)
-        if not isReady:
-            print("Client: Probing connect Fail")
-            return
-        probing_time0 = time.time()
-        sock.send(b"Resource query")
-        ip_info = sock.recv(BUFFER_SIZE)
-        probing_time1 = time.time()
-        rtt = probing_time1 - probing_time0
-        ip_cpu_percent, ip_conn_type = struct.unpack(HEAD_INFO,ip_info)
-        return ip_cpu_percent, ip_conn_type, self.size_arrange[self.required_index], rtt
+    def proping(self, ip_list):
+        isProp = True
+        for ip in ip_list:
+            if isProp:
+                self.check_conn(ip, self.port)
+
+                proping_time0 = time.time()
+                self.sock.send(b"Resource query")
+                ip_info = self.sock.recv(BUFFER_SIZE)
+                proping_time1 = time.time()
+                rtt = proping_time1 - proping_time0
+                isProp = self.select_ip(ip_info, rtt)
+                if not isProp:
+                  target_ip = ip            
+                  break
+        return target_ip
 
     ## Run the client
-    def run(self, ip, port = 50000):
+    def run(self, ip, port):
         print("Client: Here is the client side")
 
-        #*********************Probing Processs********************
-        # target_ip = self.probing(self.ip_list)
+        #*********************Proping Processs********************
+        # target_ip = self.proping(self.ip_list)
         target_ip = "127.0.0.1"
-        ip_cpu_percent, ip_conn_type, curr_band, rtt = self.probing(target_ip)
-        print("---\nCPU percent: {}\nConnection type: {}\nCurrent bandwidth: {}\nRTT: {}\n---"
-            .format(ip_cpu_percent, ip_conn_type, curr_band, rtt))
 
         #*********************Transferring Process*******************     
         self.transfer(target_ip, self.port)
 
     ## Check the connection
-    def check_conn(self, sock, ip, port = 50000):
+    def check_conn(self, ip, port):
         # # Check the connection
         print("Client: Connecting %s:%s..." % (ip, port))
         try:
-            sock.connect((ip, port))            
-            print("Server: Connect Succeed")
+            self.sock.connect((ip, port))            
+            print("Server: Connection Succeed")
         except Exception as e:
-            print("Server: Connect ERROR")
+            print("Server: Connection ERROR")
             print("Exception: ", repr(e))
             exit()
         # Check the file to transfer
-        isReady = sock.recv(BUFFER_SIZE)
-        # sock.send(b"Client: Ready")
+        isReady = self.sock.recv(BUFFER_SIZE)
+        # self.sock.send(b"Client: Ready")
         if isReady.decode() == "Server: Ready":
             print(isReady)
             return True
         else:
-            # print("Connection fail")
+            print("Connection fail")
             return False
 
     ## Transfer the files
-    def transfer(self, ip, port = 50000):
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        isReady = self.check_conn(sock, ip, port)
+    def transfer(self, ip, port):
+        isReady = self.check_conn(ip, port)
         if not isReady:
-            print("Client: Transfer connect fail")
             return
-        sock.send(b"File transfer")
-        # sock.send(b"FW")
-        # sock.close()
-        # return
+        self.sock.send(b"File transfer")
         
         image_path = "./testImages/"
         image_list = list(image_name for image_name in os.listdir(image_path))
         image_num = len(image_list)
         
         print("File num: ", image_num.to_bytes(4, byteorder='big'),"/",len(image_list))
-        sock.send(image_num.to_bytes(4, byteorder='big'))
+        self.sock.send(image_num.to_bytes(4, byteorder='big'))
         # print("MIN:", min(self.size_arrange)) 106.84311625
         # print("MAX:", max(self.size_arrange)) 1183.70575
 
@@ -170,8 +176,8 @@ class Client(threading.Thread):
             file_size, md5 = file_processor.get_file_info(image_path+image_name)
             file_info = struct.pack(HEAD_STRUCT, bytes(image_name.encode('utf-8')),
                 len(image_name), file_size, self.required_index ,md5)
-            sock.send(file_info)
-            receive_packet = sock.recv(BUFFER_SIZE)
+            self.sock.send(file_info)
+            receive_packet = self.sock.recv(BUFFER_SIZE)
             print(receive_packet)
             sent_size = 0
 
@@ -191,13 +197,13 @@ class Client(threading.Thread):
             # Run the send scheduler
             print("Client: sending image {}...".format(image_name))
             send_scheduler = SendScheduler()
-            send_thread = threading.Thread(target=send_scheduler.run, args=(sock,send_files,))
+            send_thread = threading.Thread(target=send_scheduler.run, args=(self.sock,send_files,))
             send_thread.start()
             time.sleep(len(send_files))
             send_scheduler.terminate()
             print("Client: Send finished")
 
-            reply_packet = sock.recv(2)
+            reply_packet = self.sock.recv(2)
             if reply_packet == b"OK":
                 continue
             else:
@@ -206,12 +212,12 @@ class Client(threading.Thread):
 
         # Receive the result from the server
         for i in range(image_num):
-            imgName = sock.recv(BUFFER_SIZE)
-            sock.send(b"OK")
-            result = sock.recv(BUFFER_SIZE)
+            imgName = self.sock.recv(BUFFER_SIZE)
+            self.sock.send(b"OK")
+            result = self.sock.recv(BUFFER_SIZE)
             print("{}: {}\n----".format(imgName,result))
         
-        sock.close()
+        self.sock.close()
 
 
 if __name__ == '__main__':
