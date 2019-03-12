@@ -13,8 +13,8 @@ import psutil
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-BUFFER_SIZE = 1300
-HEAD_STRUCT = '128sIq32xs'
+BUFFER_SIZE = 1200
+HEAD_STRUCT = '128sIqi32xs'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -30,9 +30,9 @@ class FileProcessor():
             return md5
 
     def unpack_file_info(self, file_info):
-        file_name, file_name_len, file_size, md5 = struct.unpack(HEAD_STRUCT, file_info)
+        file_name, file_name_len, file_size, required_index, md5 = struct.unpack(HEAD_STRUCT, file_info)
         file_name = file_name[:file_name_len]
-        return file_name.decode(), file_size, md5
+        return file_name.decode(), file_size, required_index, md5
 
     def get_local_info(self):
         cpu_percent = psutil.cpu_percent(None)
@@ -49,6 +49,9 @@ class Server(threading.Thread):
         threading.Thread.__init__(self)
         self.load_model()
         self.file_processor = FileProcessor()
+        with open("sprintGo.txt","r") as ulFile:
+            self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
+            ulFile.close()
 
     ## Configure the alexNet and load the pre-trained model
     def load_model(self):
@@ -90,30 +93,26 @@ class Server(threading.Thread):
             file_count = int.from_bytes(file_num, byteorder='big', signed = False)
             print("File num: ",file_num, "/",file_count)
 
-            with open("sprintGo.txt","r") as ulFile:
-                size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
-                ulFile.close()
-
             while file_count > 0:
                 file_count -= 1
 
                 # Check the file to transfer 
                 file_info = sock.recv(info_size)
-                file_name, file_size, md5_recv = self.file_processor.unpack_file_info(file_info)
+                file_name, file_size, self.required_index, md5_recv = self.file_processor.unpack_file_info(file_info)
                 image_list.append(file_name)
                 sock.send(b"S: Received file information")
 
                 # Receive data from client 
                 received_size = 0
-                require_size = size_arrange[0]
+                require_size = self.size_arrange[0]
                 print("S: receiving image {}...".format(file_name))
                 with open(receive_path+'/'+file_name,'wb') as fw:
                     count = 0
-                    required_index = 0
+                    # required_index = 0
                     while received_size < file_size:
                         remained_size = file_size - received_size
-                        require_size = size_arrange[required_index]
-                        required_index += 1
+                        require_size = self.size_arrange[self.required_index]
+                        self.required_index += 1
                         recv_size = min(require_size, remained_size)
                         recv_file = sock.recv(recv_size)
                         # print(len(recv_file))

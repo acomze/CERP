@@ -9,8 +9,8 @@ import numpy as np
 import tensorflow as tf
 from apscheduler.schedulers.blocking import BlockingScheduler
 
-BUFFER_SIZE = 1300
-HEAD_STRUCT = '128sIq32xs'
+BUFFER_SIZE = 1200
+HEAD_STRUCT = '128sIqi32xs'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -175,7 +175,7 @@ class Client(threading.Thread):
             file_processor = FileProcessor()
             file_size, md5 = file_processor.get_file_info(image_path+image_name)
             file_info = struct.pack(HEAD_STRUCT, bytes(image_name.encode('utf-8')),
-                len(image_name), file_size, md5)
+                len(image_name), file_size, self.required_index ,md5)
             self.sock.send(file_info)
             receive_packet = self.sock.recv(BUFFER_SIZE)
             print(receive_packet)
