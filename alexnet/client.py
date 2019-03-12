@@ -46,7 +46,7 @@ class SendScheduler(threading.Thread):
         self.scheduler = BlockingScheduler()
             
     def send_job(self, sock, send_file, times):
-        print("[{}kB/s] Client: sending file packet {}...".format(len(send_file),times))
+        print("[Client][{}kB/s] sending file packet {}...".format(len(send_file),times))
         sock.send(send_file)
         # print(len(send_file))
         sock.recv(10)
@@ -64,12 +64,12 @@ class SendScheduler(threading.Thread):
 
     def terminate(self):
         self.scheduler.shutdown()
-        print("Client: Send scheduler terminated")
+        print("[Client] Send scheduler terminated.")
         self._running = False
     
 
 ###################
-# Client: 
+# [Client] 
 # The client. See notes on each function.
 ###################        
 class Client(threading.Thread):
@@ -93,48 +93,49 @@ class Client(threading.Thread):
         
     ## Porping each ip in ip_list
     def probing(self, ip, port = 50000):
+        print("[Client] Start probing...")
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         isReady = self.check_conn(sock, ip, port)
         if not isReady:
-            print("Client: Probing connect Fail")
+            print("[Client] Probing connect Fail.")
             return
         probing_time0 = time.time()
-        sock.send(b"Resource query")
+        sock.send(b"[Client] Resource query...")
         ip_info = sock.recv(BUFFER_SIZE)
         probing_time1 = time.time()
         rtt = probing_time1 - probing_time0
         ip_cpu_percent, ip_conn_type = struct.unpack(HEAD_INFO,ip_info)
+        print("[Client] Probing finished.")
         return ip_cpu_percent, ip_conn_type, self.size_arrange[self.required_index], rtt
 
     ## Run the client
     def run(self, ip, port = 50000):
-        print("Client: Here is the client side")
+        print("[Client] Here is the client side.")
 
         #*********************Probing Processs********************
-        # target_ip = self.probing(self.ip_list)
         target_ip = "127.0.0.1"
         ip_cpu_percent, ip_conn_type, curr_band, rtt = self.probing(target_ip)
         print("---\nCPU percent: {}\nConnection type: {}\nCurrent bandwidth: {}\nRTT: {}\n---"
             .format(ip_cpu_percent, ip_conn_type, curr_band, rtt))
-
+        
         #*********************Transferring Process*******************     
         self.transfer(target_ip, self.port)
 
     ## Check the connection
     def check_conn(self, sock, ip, port = 50000):
         # # Check the connection
-        print("Client: Connecting %s:%s..." % (ip, port))
+        print("[Client] Connecting %s:%s..." % (ip, port))
         try:
             sock.connect((ip, port))            
-            print("Server: Connect Succeed")
+            print("[Client] Connect Succeed.")
         except Exception as e:
-            print("Server: Connect ERROR")
+            print("[Client] Connect ERROR.")
             print("Exception: ", repr(e))
             exit()
         # Check the file to transfer
         isReady = sock.recv(BUFFER_SIZE)
-        # sock.send(b"Client: Ready")
-        if isReady.decode() == "Server: Ready":
+        # sock.send(b"[Client] Ready")
+        if isReady.decode() == "[Server] Ready.":
             print(isReady)
             return True
         else:
@@ -146,9 +147,9 @@ class Client(threading.Thread):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         isReady = self.check_conn(sock, ip, port)
         if not isReady:
-            print("Client: Transfer connect fail")
+            print("[Client] Transfer connect fail.")
             return
-        sock.send(b"File transfer")
+        sock.send(b"[Client] File transfer...")
         # sock.send(b"FW")
         # sock.close()
         # return
@@ -157,7 +158,7 @@ class Client(threading.Thread):
         image_list = list(image_name for image_name in os.listdir(image_path))
         image_num = len(image_list)
         
-        print("File num: ", image_num.to_bytes(4, byteorder='big'),"/",len(image_list))
+        print("[Client] File num: ", image_num.to_bytes(4, byteorder='big'),"/",len(image_list))
         sock.send(image_num.to_bytes(4, byteorder='big'))
         # print("MIN:", min(self.size_arrange)) 106.84311625
         # print("MAX:", max(self.size_arrange)) 1183.70575
@@ -189,19 +190,19 @@ class Client(threading.Thread):
                 img.close()
             
             # Run the send scheduler
-            print("Client: sending image {}...".format(image_name))
+            print("[Client] sending image {}...".format(image_name))
             send_scheduler = SendScheduler()
             send_thread = threading.Thread(target=send_scheduler.run, args=(sock,send_files,))
             send_thread.start()
             time.sleep(len(send_files))
             send_scheduler.terminate()
-            print("Client: Send finished")
+            print("[Client] Send finished.")
 
             reply_packet = sock.recv(2)
             if reply_packet == b"OK":
                 continue
             else:
-                print("Connection ERROR.\nCurrent file:",image_name)
+                print("Connection ERROR.\nCurrent file: ",image_name)
                 break
 
         # Receive the result from the server
@@ -215,7 +216,7 @@ class Client(threading.Thread):
 
 
 if __name__ == '__main__':
-    print("Client: Test start...")
+    print("[Client] Test start...")
     ip = "127.0.0.1" # Local
     port = 50000
     client = Client()

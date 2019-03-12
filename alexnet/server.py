@@ -42,7 +42,7 @@ class FileProcessor():
         return local_info
 
 ###################
-# Server: 
+# [Server] 
 # The server. See notes on each function.
 ###################    
 class Server(threading.Thread):
@@ -73,10 +73,10 @@ class Server(threading.Thread):
 
     ## Run the server
     def run(self, sock, addr):
-        print("Server: Connecting %s:%s..." % addr)
-        print("Server: Here is the server side")
+        print("[Server] Connecting %s:%s..." % addr)
+        print("[Server] Here is the server side.")
 
-        sock.send(b"Server: Ready")
+        sock.send(b"[Server] Ready.")
         # isReady = sock.recv(BUFFER_SIZE)
         # print(isReady)
         # while True:
@@ -85,10 +85,10 @@ class Server(threading.Thread):
         # "Resource query": Proping processs
         # "File transfer": Transfering process
         print(packet_receive)
-        if packet_receive.decode() == "Resource query":
+        if packet_receive.decode() == "[Client] Resource query...":
             local_info = self.file_processor.get_local_info()
             sock.send(local_info)
-        elif packet_receive.decode() == "File transfer":
+        elif packet_receive.decode() == "[Client] File transfer...":
             receive_path = "./receive"
             image_list = []
             file_num = sock.recv(BUFFER_SIZE)
@@ -102,12 +102,12 @@ class Server(threading.Thread):
                 file_info = sock.recv(info_size)
                 file_name, file_size, self.required_index, md5_recv = self.file_processor.unpack_file_info(file_info)
                 image_list.append(file_name)
-                sock.send(b"S: Received file information")
+                sock.send(b"[Server] Received file information.")
 
                 # Receive data from client 
                 received_size = 0
                 require_size = self.size_arrange[0]
-                print("S: receiving image {}...".format(file_name))
+                print("S: Receiving image {}...".format(file_name))
                 with open(receive_path+'/'+file_name,'wb') as fw:
                     count = 0
                     # required_index = 0
@@ -119,14 +119,14 @@ class Server(threading.Thread):
                         recv_file = sock.recv(recv_size)
                         # print(len(recv_file))
                         # print(recv_file) 
-                        print("[{}kB/s] Server: receiving file packet {}...".format(recv_size, count))
-                        sock.send(b"Server: OK")
+                        print("[Server][{}kB/s] Receiving file packet {}...".format(recv_size, count))
+                        sock.send(b"[Server] OK.")
                         count += 1
                         received_size += recv_size
                         fw.write(recv_file)
                     fw.close()
 
-                print("Server: Received {} successfully".format(file_name))
+                print("[Server] Received {} successfully.".format(file_name))
                 sock.send(b"OK")
 
             
@@ -142,7 +142,7 @@ class Server(threading.Thread):
                 sock.recv(2)
                 sock.send(bytes(result.encode('utf-8')))
         else:
-            print("Server: query invalid")
+            print("[Server] Query invalid.")
 
 
 
@@ -156,9 +156,9 @@ if __name__ == '__main__':
     sock.bind((ip, port))    
     sock.listen(1)
     server = Server()
-    print("Waiting for connection...")
+    print("[Server] Waiting for connection...")
     while True:
-        print("SOCK:",sock)
+        print("[Server] SOCK:",sock)
         client_sock, addr = sock.accept()
         # t = threading.Thread(target=server.run, args=(sock, addr))
         server.run(client_sock, addr)
