@@ -91,7 +91,7 @@ class Server(threading.Thread):
         elif packet_receive.decode() == "[Client] File transfer...":
             receive_path = "./receive"
             image_list = []
-            file_num = sock.recv(BUFFER_SIZE)
+            file_num = sock.recv(4)
             file_count = int.from_bytes(file_num, byteorder='big', signed = False)
             print("File num: ",file_num, "/",file_count)
 
@@ -129,7 +129,7 @@ class Server(threading.Thread):
                 print("[Server] Received {} successfully.".format(file_name))
                 sock.send(b"OK")
 
-            
+            print("[Server] Image processing...")
             testImg = dict((imgName,Image.open(receive_path+'/'+imgName) ) for imgName in image_list)
 
             for imgName,img in testImg.items(): 

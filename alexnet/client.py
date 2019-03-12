@@ -49,7 +49,7 @@ class SendScheduler(threading.Thread):
         print("[Client][{}kB/s] sending file packet {}...".format(len(send_file),times))
         sock.send(send_file)
         # print(len(send_file))
-        sock.recv(10)
+        sock.recv(12)
 
     def run(self, sock, send_files):
         i = 0
@@ -113,7 +113,7 @@ class Client(threading.Thread):
         print("[Client] Here is the client side.")
 
         #*********************Probing Processs********************
-        target_ip = "127.0.0.1"
+        target_ip = ip
         ip_cpu_percent, ip_conn_type, curr_band, rtt = self.probing(target_ip)
         print("---\nCPU percent: {}\nConnection type: {}\nCurrent bandwidth: {}\nRTT: {}\n---"
             .format(ip_cpu_percent, ip_conn_type, curr_band, rtt))
@@ -217,7 +217,9 @@ class Client(threading.Thread):
 
 if __name__ == '__main__':
     print("[Client] Test start...")
-    ip = "127.0.0.1" # Local
+    # ip = "127.0.0.1" # Local
+    # ip = "192.168.1.101" # Jetson
+    ip = "192.168.26.66" # Server
     port = 50000
     client = Client()
     client.run(ip, port)
