@@ -16,6 +16,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 BUFFER_SIZE = 1200
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
+HEAD_LEN = 'I'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -41,6 +42,13 @@ class FileProcessor():
         local_info = struct.pack(HEAD_INFO, cpu_percent, conn_type)
         return local_info
 
+    def get_len_send_files(self, bytes_len_list):
+        len_list = eval(bytes_len_list.decode())
+        len_all = len_list[0]
+        len_band = len_list[1:len_all+1]
+        len_send_files = len_list[1+len_all:]
+        return len_band, len_send_files
+
 ###################
 # [Server] 
 # The server. See notes on each function.
@@ -50,8 +58,9 @@ class Server(threading.Thread):
         threading.Thread.__init__(self)
         self.load_model()
         self.file_processor = FileProcessor()
+        self.probing_time = 0
         with open("sprintGo.txt","r") as ulFile:
-            self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
+            self.size_arrange = list(int(float(ul)/8*1000) for ul in ulFile.readlines())
             ulFile.close()
 
     ## Configure the alexNet and load the pre-trained model
@@ -71,6 +80,11 @@ class Server(threading.Thread):
         self.sess.run(tf.global_variables_initializer())
         model.loadModel(self.sess)
 
+    ## Set current probing time. The unit is second (s).
+    def set_probing_time(self, probing_time):
+        self.probing_time = probing_time
+
+
     ## Run the server
     def run(self, sock, addr):
         print("[Server] Connecting %s:%s..." % addr)
@@ -80,13 +94,14 @@ class Server(threading.Thread):
         # isReady = sock.recv(BUFFER_SIZE)
         # print(isReady)
         # while True:
-        packet_receive = sock.recv(BUFFER_SIZE)
+        packet_receive = sock.recv(25)
         
         # "Resource query": Proping processs
         # "File transfer": Transfering process
         print(packet_receive)
-        if packet_receive.decode() == "[Client] Resource query...":
+        if packet_receive.decode() == "[Client] Resource query..":
             local_info = self.file_processor.get_local_info()
+            time.sleep(self.probing_time)
             sock.send(local_info)
         elif packet_receive.decode() == "[Client] File transfer...":
             receive_path = "./receive"
@@ -104,28 +119,34 @@ class Server(threading.Thread):
                 image_list.append(file_name)
                 sock.send(b"[Server] Received file information.")
 
+                bytes_len_list = sock.recv(BUFFER_SIZE)
+                len_band, len_send_files = self.file_processor.get_len_send_files(bytes_len_list)
+
                 # Receive data from client 
                 received_size = 0
-                require_size = self.size_arrange[0]
+                i = 0
+                j = 0
+                accumulate_len = 0
+                current_band = self.size_arrange[self.required_index]/1000
                 print("S: Receiving image {}...".format(file_name))
                 with open(receive_path+'/'+file_name,'wb') as fw:
-                    count = 0
-                    # required_index = 0
                     while received_size < file_size:
-                        remained_size = file_size - received_size
-                        require_size = self.size_arrange[self.required_index]
-                        self.required_index += 1
-                        recv_size = min(require_size, remained_size)
+                        recv_size = len_send_files[i]
+                        i += 1
+                        if i == accumulate_len:
+                            j += 1
+                            accumulate_len += len_band[j]
+                            current_band = self.size_arrange[self.required_index + j]/1000
                         recv_file = sock.recv(recv_size)
                         # print(len(recv_file))
                         # print(recv_file) 
-                        print("[Server][{}kB/s] Receiving file packet {}...".format(recv_size, count))
+                        print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, i))
                         sock.send(b"[Server] OK.")
-                        count += 1
                         received_size += recv_size
                         fw.write(recv_file)
                     fw.close()
-
+                
+                self.required_index += j
                 print("[Server] Received {} successfully.".format(file_name))
                 sock.send(b"OK")
 
@@ -149,14 +170,15 @@ class Server(threading.Thread):
 if __name__ == '__main__':
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # ip = "192.168.1.199"
-    # ip = "192.168.26.66"
+    # ip = "192.168.1.199" # Desktop
+    # ip = "192.168.26.66" # Server
     ip = "0.0.0.0"
     port = 50000
     sock.bind((ip, port))    
     sock.listen(1)
     server = Server()
     print("[Server] Waiting for connection...")
+    # isTerminate = True
     while True:
         print("[Server] SOCK:",sock)
         client_sock, addr = sock.accept()

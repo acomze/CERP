@@ -115,10 +115,9 @@ def main():
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-    imagePath = "./testImages"
-    imageName = [
-        "000001.jpg"
-    ]
+    imagePath = "./testModel/"
+    imageName = list(image_name for image_name in os.listdir(imagePath))
+    imageNum = len(imageName)
 
     withPath = lambda imgName: '{}/{}'.format(imagePath,imgName)
     # testImg = dict((imgName,cv2.imread(withPath(imgName))) for imgName in imageName)
@@ -143,14 +142,24 @@ def main():
         with tf.Session(config=config) as sess:
             sess.run(tf.global_variables_initializer())
             model.loadModel(sess)
-            for key,img in testImg.items():
-                #img preprocess
-                # resized = cv2.resize(img.astype(np.float), (227, 227)) - imgMean
-                resized = np.array(img.resize((227, 227))) - imgMean
-                maxx = np.argmax(sess.run(softmax, feed_dict = {x: resized.reshape((1, 227, 227, 3))}))
-                res = caffe_classes.class_names[maxx]
-
-                print("{}: {}\n----".format(key,res))
+            sumtime = 0
+            T = 1000
+            for i in range(T):
+                for key,img in testImg.items():
+                    imgShape = np.array(img).shape
+                    # print("Image size: " , imgShape)
+                    #img preprocess
+                    # resized = cv2.resize(img.astype(np.float), (227, 227)) - imgMean
+                    resized = np.array(img.resize((227, 227))) - imgMean
+                    time0 = time.time()
+                    maxx = np.argmax(sess.run(softmax, feed_dict = {x: resized.reshape((1, 227, 227, 3))}))
+                    time1 = time.time()
+                    sumtime += (time1 - time0)
+                    # print("Image processing latency: ", time1 - time0)
+                    res = caffe_classes.class_names[maxx]
+                print("i: {}|Latency: {}".format(i, time1-time0), end = '\r')
+                    # print("{}: {}\n----".format(key,res))
+        print("Average image processing latency: ", sumtime/(T*imageNum))
 
 if __name__ == "__main__":
     main()
