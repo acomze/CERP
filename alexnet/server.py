@@ -16,7 +16,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 BUFFER_SIZE = 1200
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
-HEAD_LEN = 'I'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
