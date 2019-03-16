@@ -12,7 +12,7 @@ import random
 import psutil
 import math
 
-BUFFER_SIZE = 1200
+BUFFER_SIZE = 1448
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
 info_size = struct.calcsize(HEAD_STRUCT)
@@ -75,10 +75,10 @@ class SendScheduler(threading.Thread):
         return sum_latency + last_latency
 
     def send_job(self, sock, send_file, current_band, times):
-        print("[Client][{}kB/s] sending file packet {}...".format(current_band/1000,times))
         sock.send(send_file)
+        print("[Client][{}kB/s] sending file packet {}...".format(current_band/1000,times), end = "")
+        print(len(send_file))
         # print(send_file)
-        # print(len(send_file))
         sock.recv(12)
 
     def run(self, sock, send_files_list, band_list):
@@ -98,7 +98,7 @@ class SendScheduler(threading.Thread):
                 print("i: {}|len: {}|packet_num:{}|band_num: {}".
                     format(i,len(send_files_list[i]),packet_num,band_num))
                 return
-            latency_delta = 1/packet_num
+            latency_delta = 1/packet_num*10
             send_files = send_files_list[i]
             for send_file in send_files:
                 self.scheduler.add_job(func=self.send_job, args=(sock, send_file, current_band, j, ), 
@@ -130,7 +130,6 @@ class Client(threading.Thread):
             ulFile.close()
         self.file_processor = FileProcessor()
         self.required_index = 0
-        
         # Assume all agree the port: 50000
         self.port = 50000
         self.ip_list = [
@@ -291,9 +290,11 @@ class Client(threading.Thread):
 
         # Receive the result from the server
         for i in range(image_num):
-            imgName = sock.recv(BUFFER_SIZE)
+            # imgName = sock.recv(BUFFER_SIZE)
+            imgResult = sock.recv(BUFFER_SIZE)
+            imgName, result = imgResult.decode().split("||")
             sock.send(b"OK")
-            result = sock.recv(BUFFER_SIZE)
+            # result = sock.recv(BUFFER_SIZE)
             print("{}: {}\n----".format(imgName,result))
         
         sock.close()

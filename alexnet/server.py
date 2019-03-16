@@ -13,7 +13,7 @@ import psutil
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-BUFFER_SIZE = 1200
+BUFFER_SIZE = 1448
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
 info_size = struct.calcsize(HEAD_STRUCT)
@@ -131,17 +131,17 @@ class Server(threading.Thread):
                 with open(receive_path+'/'+file_name,'wb') as fw:
                     while received_size < file_size:
                         recv_size = len_send_files[i]
+                        recv_file = sock.recv(recv_size)
+                        print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, i), end = "")
+                        print(len(recv_file))
+                        # print(recv_file) 
+                        sock.send(b"[Server] OK.")
+                        received_size += recv_size
                         i += 1
                         if i == accumulate_len:
                             j += 1
                             accumulate_len += len_band[j]
                             current_band = self.size_arrange[self.required_index + j]/1000
-                        recv_file = sock.recv(recv_size)
-                        # print(len(recv_file))
-                        # print(recv_file) 
-                        print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, i))
-                        sock.send(b"[Server] OK.")
-                        received_size += recv_size
                         fw.write(recv_file)
                     fw.close()
                 
@@ -158,9 +158,11 @@ class Server(threading.Thread):
                 # maxx = 0 # for test use
                 result = caffe_classes.class_names[maxx]
                 print("{}: {}\n----".format(imgName,result))
-                sock.send(bytes(imgName.encode('utf-8')))
+                imgResult = imgName + "||" + result
+                sock.send(bytes(imgResult.encode('utf-8')))
                 sock.recv(2)
-                sock.send(bytes(result.encode('utf-8')))
+                # sock.send(bytes(result.encode('utf-8')))
+                # time.sleep(1)
         else:
             print("[Server] Query invalid.")
 
