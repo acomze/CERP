@@ -5,14 +5,13 @@
 import os
 import argparse
 import sys
-import alexnet
 # import cv2
 import tensorflow as tf
 import numpy as np
 import caffe_classes
 from PIL import Image
 import time
-# import matplotlib.pyplot as plt
+import psutil
 
 # define different layer functions
 # we usually don't do convolution and pooling on batch and channel
@@ -115,7 +114,7 @@ def main():
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-    imagePath = "./testModel/"
+    imagePath = "./timerImages/"
     imageName = list(image_name for image_name in os.listdir(imagePath))
     imageNum = len(imageName)
 
@@ -136,30 +135,42 @@ def main():
         model = alexnet.alexNet(x, dropoutPro, classNum, skip)
         score = model.fc3
         softmax = tf.nn.softmax(score)
-
-        gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
-        config=tf.ConfigProto(gpu_options=gpu_options)
-        with tf.Session(config=config) as sess:
+        
+        
+        # gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.3)
+        # config=tf.ConfigProto(gpu_options=gpu_options)
+        with tf.Session() as sess:
             sess.run(tf.global_variables_initializer())
             model.loadModel(sess)
-            sumtime = 0
-            T = 1000
+            sumTime = 0
+            sumCpu = 0
+            T = 100
+            record_file = open("record_timer.txt", "w")
             for i in range(T):
+                j = 0
                 for key,img in testImg.items():
                     imgShape = np.array(img).shape
                     # print("Image size: " , imgShape)
                     #img preprocess
                     # resized = cv2.resize(img.astype(np.float), (227, 227)) - imgMean
                     resized = np.array(img.resize((227, 227))) - imgMean
+                    cpu_percent = psutil.cpu_percent(interval = None)
+                    sumCpu += cpu_percent
                     time0 = time.time()
                     maxx = np.argmax(sess.run(softmax, feed_dict = {x: resized.reshape((1, 227, 227, 3))}))
                     time1 = time.time()
-                    sumtime += (time1 - time0)
+                    sumTime += (time1 - time0)
                     # print("Image processing latency: ", time1 - time0)
+                    record_file.write("{}|{}|{}|{}\n".format(i,j,cpu_percent,time1-time0))
                     res = caffe_classes.class_names[maxx]
-                print("i: {}|Latency: {}".format(i, time1-time0), end = '\r')
+                    j += 1
+                print("i: {}|CPU: {}%|Latency: {}".format(i, cpu_percent, time1-time0), end = '\r')
                     # print("{}: {}\n----".format(key,res))
-        print("Average image processing latency: ", sumtime/(T*imageNum))
+            record_file.close()
+        print()
+        print("Avgrage image size: {} B".format(16071))
+        print("Average image processing latency: ", sumTime/(T*imageNum))
+        print("Average CPU percent: ", sumCpu/(T*imageNum))
 
 if __name__ == "__main__":
     main()

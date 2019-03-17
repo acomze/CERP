@@ -15,7 +15,6 @@ import math
 BUFFER_SIZE = 1024
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
-HEAD_SIZE = 8
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -41,18 +40,11 @@ class FileProcessor():
         send_files = []
         sent_size = 0
         remained_size = len(read_file)
-        id = 0
-        while remained_size + HEAD_SIZE > BUFFER_SIZE:
-            send_size = BUFFER_SIZE - HEAD_SIZE
-            body_size = send_size
-            headPack = struct.pack("!2I", id, body_size)
-            send_files.append(headPack + read_file[sent_size:sent_size+send_size])
-            sent_size += send_size
-            remained_size -= send_size
-            id += 1
-        body_size = remained_size
-        headPack = struct.pack("!2I", id, body_size)
-        send_files.append(headPack + read_file[sent_size:sent_size+remained_size])
+        while remained_size > BUFFER_SIZE:
+            send_files.append(read_file[sent_size:sent_size+BUFFER_SIZE])
+            sent_size += BUFFER_SIZE
+            remained_size -= BUFFER_SIZE
+        send_files.append(read_file[sent_size:sent_size+remained_size])
         return send_files
 
     def get_len_list(self, send_files_list):
@@ -83,23 +75,11 @@ class SendScheduler(threading.Thread):
         return sum_latency + last_latency
 
     def send_job(self, sock, send_file, current_band, times):
-        sock.send(send_file)
+        sock.sendall(send_file)
         print("[Client][{}kB/s] sending file packet {}...".format(current_band/1000,times), end = "")
-        sent_size = len(send_file)
         print(len(send_file))
-
         # print(send_file)
-        size_pack = sock.recv(4)
-        recv_size, = struct.unpack("!I", size_pack)
-        while sent_size != recv_size:
-            print("times: {}|sent_size:{}|recv_size:{}".format(times, sent_size, recv_size))
-            sock.send(send_file)
-            print("[Client][{}kB/s] sending file packet {}...".format(current_band/1000,times), end = "")
-            sent_size = len(send_file)
-            print(len(send_file))
-            # print(send_file)
-            size_pack = sock.recv(4)
-            recv_size, = struct.unpack("!I", size_pack)
+        sock.recv(12)
 
     def run(self, sock, send_files_list, band_list):
         if len(send_files_list) != len(band_list):
@@ -118,7 +98,7 @@ class SendScheduler(threading.Thread):
                 print("i: {}|len: {}|packet_num:{}|band_num: {}".
                     format(i,len(send_files_list[i]),packet_num,band_num))
                 return
-            latency_delta = 1/len(send_files_list[i])
+            latency_delta = 1/packet_num
             print("Cur_band: {}|packt_num:{}|latency_delta:{}".format(current_band,packet_num,latency_delta))
             send_files = send_files_list[i]
             count = 0
@@ -335,7 +315,7 @@ if __name__ == '__main__':
     # ip = "192.168.1.151" # Desktop Tao
     # ip = "192.168.1.106" # Desktop En
     # ip = "192.168.1.169" # Desktop Xgw
-    ip = "192.168.1.199" # Desktop LK
+    # ip = "192.168.1.199" # Desktop LK
     port = 50000
     client = Client()
     client.run(ip, port)

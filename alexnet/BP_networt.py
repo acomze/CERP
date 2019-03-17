@@ -10,7 +10,7 @@ from collections import defaultdict
 
 MEMORY_CAPACITY = 1000
 BATCH_SIZE = 32
-s_dim = 7
+s_dim = 5
 Dsigpower = 0.2
 Csigpower = 0.6
 
@@ -33,7 +33,7 @@ def estimate_value(service_demand, input_data, device_state, current_cost, obser
     else:
         power_com = trans * Csigpower
 
-    total = observation[4]*(computing_delay + trans) + observation[5]*power_com
+    total = observation[2]*(computing_delay + trans) + observation[3]*power_com
 
     gain = min(0, total - current_cost) + device_state[3]
     return gain
@@ -80,7 +80,7 @@ def catch_list():
     #                 "192.168.1.101": "j1",
     #                 "192.168.1.199": "d1",
     #                 "127.0.0.1": "l1"})
-    ip_list = dict({"192.168.1.101": "j1",
+    ip_list = dict({"192.168.26.66": "s1",
                     })
     # ip_list = [
     #     "192.168.1.128",  # Raspberry
@@ -241,7 +241,7 @@ def main():
         # f2 = open('resultData/HRL_stage.txt', 'w')
 
 
-        for episode in range(10000):
+        for episode in range(10):
 
             service_amount, service_size, capacity, power, lamda_1, lamda_2 = device_info()
 
@@ -341,6 +341,7 @@ def main():
 
                     print("cost", current_cost)
                     print("stage", stage)
+                    print("best ip", best_device_ip)
                     if best_device_ip == "local":
                         print("local execution")
                     else:
@@ -352,6 +353,7 @@ def main():
                     # print(reserve_threshold_estimator)
                     # print('---------------------------------------------------')
                     if len(cost_value_up) > 0:
+                        print("error", reserve_threshold_estimator[0][0])
                         bp.store_transition(reserve_threshold_estimator[0][0], min_cost)
                         # print("============================================")
                         # print("reward", min_cost)

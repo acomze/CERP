@@ -16,7 +16,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 BUFFER_SIZE = 1024
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
-HEAD_SIZE = 8
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -127,41 +126,23 @@ class Server(threading.Thread):
                 i = 0
                 j = 0
                 accumulate_len = 0
-                recv_buffer = bytes()
                 current_band = self.size_arrange[self.required_index]/1000
                 print("S: Receiving image {}...".format(file_name))
                 with open(receive_path+'/'+file_name,'wb') as fw:
                     while received_size < file_size:
-                        # recv_size = len_send_files[i]
-                        recv_size = BUFFER_SIZE
+                        recv_size = len_send_files[i]
                         recv_file = sock.recv(recv_size)
-                        # print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, id), end = "")
+                        print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, i), end = "")
                         print(len(recv_file))
                         # print(recv_file) 
-                        # sock.send("[Server] OK")
-                        sock.send(struct.pack("!I", len(recv_file)))
-                        
-                        if recv_file:
-                            recv_buffer += recv_file
-                            while True:
-                                if len(recv_buffer) < HEAD_SIZE:
-                                    break
-                                id, body_size = struct.unpack("!2I", recv_buffer[:HEAD_SIZE])
-                                if len(recv_buffer) < HEAD_SIZE + body_size:
-                                    print("[Server] The receive packet {} is incomplete. {}/{}. Required resend.".
-                                        format(id, len(recv_buffer), HEAD_SIZE + body_size))
-                                    break
-                                recv_body = recv_buffer[HEAD_SIZE:HEAD_SIZE + body_size]
-                                received_size += recv_size                                
-                                print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, id), end = "")
-                                print(len(recv_file))
-                                fw.write(recv_body)
-                                recv_buffer = recv_buffer[HEAD_SIZE + body_size:]
-                                i += 1
-                                if i == accumulate_len:
-                                    j += 1
-                                    accumulate_len += len_band[j]
-                                    current_band = self.size_arrange[self.required_index + j]/1000
+                        sock.send(b"[Server] OK.")
+                        received_size += recv_size
+                        i += 1
+                        if i == accumulate_len:
+                            j += 1
+                            accumulate_len += len_band[j]
+                            current_band = self.size_arrange[self.required_index + j]/1000
+                        fw.write(recv_file)
                     fw.close()
                 
                 self.required_index += j

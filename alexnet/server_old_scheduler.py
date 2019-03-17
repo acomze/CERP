@@ -13,10 +13,9 @@ import psutil
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-BUFFER_SIZE = 1024
+BUFFER_SIZE = 1200
 HEAD_STRUCT = '128sIqi32xs'
 HEAD_INFO = 'fi'
-HEAD_SIZE = 8
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -42,13 +41,6 @@ class FileProcessor():
         local_info = struct.pack(HEAD_INFO, cpu_percent, conn_type)
         return local_info
 
-    def get_len_send_files(self, bytes_len_list):
-        len_list = eval(bytes_len_list.decode())
-        len_all = len_list[0]
-        len_band = len_list[1:len_all+1]
-        len_send_files = len_list[1+len_all:]
-        return len_band, len_send_files
-
 ###################
 # [Server] 
 # The server. See notes on each function.
@@ -59,8 +51,9 @@ class Server(threading.Thread):
         self.load_model()
         self.file_processor = FileProcessor()
         self.probing_time = 0
-        with open("sprintGo.txt","r") as ulFile:
-            self.size_arrange = list(int(float(ul)/8*1000) for ul in ulFile.readlines())
+        # with open("sprintGo.txt","r") as ulFile:
+        with open("tram_bandwidth.txt","r") as ulFile:
+            self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
             ulFile.close()
 
     ## Configure the alexNet and load the pre-trained model
@@ -83,7 +76,6 @@ class Server(threading.Thread):
     ## Set current probing time. The unit is second (s).
     def set_probing_time(self, probing_time):
         self.probing_time = probing_time
-
 
     ## Run the server
     def run(self, sock, addr):
@@ -119,73 +111,51 @@ class Server(threading.Thread):
                 image_list.append(file_name)
                 sock.send(b"[Server] Received file information.")
 
-                bytes_len_list = sock.recv(BUFFER_SIZE)
-                len_band, len_send_files = self.file_processor.get_len_send_files(bytes_len_list)
-
                 # Receive data from client 
                 received_size = 0
-                i = 0
-                j = 0
-                accumulate_len = 0
-                recv_buffer = bytes()
-                current_band = self.size_arrange[self.required_index]/1000
+                require_size = self.size_arrange[0]
                 print("S: Receiving image {}...".format(file_name))
                 with open(receive_path+'/'+file_name,'wb') as fw:
+                    count = 0
+                    # require d_index = 0
                     while received_size < file_size:
-                        # recv_size = len_send_files[i]
-                        recv_size = BUFFER_SIZE
+                        remained_size = file_size - received_size
+                        require_size = self.size_arrange[self.required_index]
+                        # self.required_index += 1
+                        recv_size = min(require_size, remained_size)
                         recv_file = sock.recv(recv_size)
-                        # print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, id), end = "")
-                        print(len(recv_file))
+                        # print(len(recv_file))
                         # print(recv_file) 
-                        # sock.send("[Server] OK")
-                        sock.send(struct.pack("!I", len(recv_file)))
-                        
-                        if recv_file:
-                            recv_buffer += recv_file
-                            while True:
-                                if len(recv_buffer) < HEAD_SIZE:
-                                    break
-                                id, body_size = struct.unpack("!2I", recv_buffer[:HEAD_SIZE])
-                                if len(recv_buffer) < HEAD_SIZE + body_size:
-                                    print("[Server] The receive packet {} is incomplete. {}/{}. Required resend.".
-                                        format(id, len(recv_buffer), HEAD_SIZE + body_size))
-                                    break
-                                recv_body = recv_buffer[HEAD_SIZE:HEAD_SIZE + body_size]
-                                received_size += recv_size                                
-                                print("[Server][{}kB/s] Receiving file packet {}...".format(current_band, id), end = "")
-                                print(len(recv_file))
-                                fw.write(recv_body)
-                                recv_buffer = recv_buffer[HEAD_SIZE + body_size:]
-                                i += 1
-                                if i == accumulate_len:
-                                    j += 1
-                                    accumulate_len += len_band[j]
-                                    current_band = self.size_arrange[self.required_index + j]/1000
+                        print("[Server][{}kB/s] Receiving file packet {}...".format(require_size, count), end="")
+                        print(len(recv_file))
+                        sock.send(b"[Server] OK.")
+                        count += 1
+                        received_size += recv_size
+                        fw.write(recv_file)
                     fw.close()
-                
-                self.required_index += j
+                self.required_index += 1
                 print("[Server] Received {} successfully.".format(file_name))
                 sock.send(b"OK")
 
             print("[Server] Image processing...")
             testImg = dict((imgName,Image.open(receive_path+'/'+imgName) ) for imgName in image_list)
-            
+
             for imgName,img in testImg.items(): 
                 resized = np.array(img.resize((227, 227))) - self.imgMean
-                time0 = time.time()
+                time0 =  time.time()
                 maxx = np.argmax(self.sess.run(self.softmax, feed_dict = {self.x: resized.reshape((1, 227, 227, 3))}))
                 # maxx = 0 # for test use
                 result = caffe_classes.class_names[maxx]
                 time1 = time.time()
                 print("{}: {}\n----".format(imgName,result))
+                # sock.send(bytes(imgName.encode('utf-8')))
+                # sock.recv(2)
+                # sock.send(bytes(result.encode('utf-8')))
                 computing_latency = time1 - time0
                 print("Computing latency: ", computing_latency)
                 imgResult = imgName + "||" + result + "||" + str(computing_latency)
                 sock.send(bytes(imgResult.encode('utf-8')))
                 sock.recv(2)
-                # sock.send(bytes(result.encode('utf-8')))
-                # time.sleep(1)
         else:
             print("[Server] Query invalid.")
 
@@ -194,8 +164,8 @@ class Server(threading.Thread):
 if __name__ == '__main__':
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    # ip = "192.168.1.199" # Desktop
-    # ip = "192.168.26.66" # Server
+    # ip = "192.168.1.199"
+    # ip = "192.168.26.66"
     ip = "0.0.0.0"
     port = 50000
     sock.bind((ip, port))    
