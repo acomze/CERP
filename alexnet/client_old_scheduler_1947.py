@@ -49,8 +49,8 @@ class SendScheduler(threading.Thread):
             
     def send_job(self, sock, send_file, times):
         sock.send(send_file)
-        print("[Client][{}kB/s] sending file packet {}...".format(len(send_file),times), end= "")
-        print(len(send_file))
+        #print("[Client][{}kB/s] sending file packet {}...".format(len(send_file),times), end= "")
+        #print(len(send_file))
         # print(len(send_file))
         sock.recv(12)
 
@@ -58,9 +58,8 @@ class SendScheduler(threading.Thread):
         i = 0
         for send_file in send_files:
             self.scheduler.add_job(func=self.send_job, args=(sock, send_file, i, ), 
-                next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=0.2+i/100))
+                next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=i/100))
             i += 1
-            # print(i, len(send_file))
         try:
             self.scheduler.start()
         except (KeyboardInterrupt, SystemExit):
@@ -243,12 +242,8 @@ class Client(threading.Thread):
             print("[Client] sending image {}...".format(image_name))
             send_scheduler = SendScheduler()
             send_thread = threading.Thread(target=send_scheduler.run, args=(sock,send_files,))
-            sleep_latency = len(send_files)*0.02
             send_thread.start()
             # time.sleep(len(send_files))
-            # sleep_latency = len(send_files)*0.02
-            # print(len(send_files))
-            # print(sleep_latency)
             time.sleep(3)
             send_scheduler.terminate()
             print("[Client] Send finished.")
@@ -286,7 +281,7 @@ if __name__ == '__main__':
     # ip = "127.0.0.1" # Local
     # ip = "192.168.1.101" # Jetson
     # ip = "192.168.26.66" # Server
-    # ip = "192.168.1.150" # Desktop Tao
+    # ip = "192.168.1.151" # Desktop Tao
     # ip = "192.168.1.106" # Desktop En
     # ip = "192.168.1.169" # Desktop Xgw
     ip = "192.168.1.199" # Desktop LK

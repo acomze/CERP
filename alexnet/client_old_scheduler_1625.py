@@ -58,9 +58,8 @@ class SendScheduler(threading.Thread):
         i = 0
         for send_file in send_files:
             self.scheduler.add_job(func=self.send_job, args=(sock, send_file, i, ), 
-                next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=0.2+i/100))
+                next_run_time=datetime.datetime.now() + datetime.timedelta(seconds=i/100))
             i += 1
-            # print(i, len(send_file))
         try:
             self.scheduler.start()
         except (KeyboardInterrupt, SystemExit):
@@ -89,13 +88,14 @@ class Client(threading.Thread):
         # Assume all agree the port: 50000
         self.port = 50000
         self.ip_list = [
+            "192.168.1.128", # Raspberry
+            "192.168.26.66" # Server
+            "192.168.1.101", # Jetson
+            "192.168.1.199", # Desktop LK
+            "192.168.1.151", # Desktop Tao
+            "192.168.1.106", # Desktop En
+            "192.168.1.169", # Desktop Xgw
             "127.0.0.1", # Local
-            # "192.168.1.101", # Jetson
-            # "192.168.26.66", # Server
-            # "192.168.1.151", # Desktop Tao
-            # "192.168.1.106", # Desktop En
-            # "192.168.1.169", # Desktop Xgw
-            # "192.168.1.199", # Desktop LK
         ]
     
     ## Get local availabel resource
@@ -138,7 +138,7 @@ class Client(threading.Thread):
         conn_type = ip.split(".")[-1]
         band_file = "./lte_band/tram_bandwidth_"+conn_type+".txt"
         with open(band_file,"r") as ulFile:
-        # self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
+            # self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
             self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
             ulFile.close()
         return ip_cpu_percent, ip_conn_type, self.size_arrange[self.required_index], rtt
@@ -154,6 +154,7 @@ class Client(threading.Thread):
             .format(ip_cpu_percent, ip_conn_type, curr_band, rtt))
         
         #*********************Transferring Process****************   
+        target_ip = "192.168.1.199"
         self.transfer(target_ip, self.port)
 
     ## Check the connection
@@ -171,7 +172,7 @@ class Client(threading.Thread):
         isReady = sock.recv(BUFFER_SIZE)
         # sock.send(b"[Client] Ready")
         if isReady.decode() == "[Server] Ready.":
-            # print(isReady)
+            print(isReady)
             return True
         else:
             # print("Connection fail")
@@ -188,9 +189,10 @@ class Client(threading.Thread):
         # sock.send(b"FW")
         # sock.close()
         # return
-#         ip = "192.168.1.199"
+        # ip = "192.168.1.199"
+
+
         conn_type = ip.split(".")[-1]
-        print(conn_type)
         band_file = "./lte_band/tram_bandwidth_"+conn_type+".txt"
         with open(band_file,"r") as ulFile:
             # self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
@@ -199,7 +201,7 @@ class Client(threading.Thread):
 
         # random.shuffle(self.size_arrange)
 
-        image_path = "./testImages/"
+        image_path = "./testImage/"
         image_list = list(image_name for image_name in os.listdir(image_path))
         image_num = len(image_list)
         
@@ -211,7 +213,6 @@ class Client(threading.Thread):
         # For each image, first send the file info. Then cut one file into file pieces
         # in send_files, which will then be input to the send scheduler to transfer 
         # according to the bandwidth dataset
-        print("Current band: ", self.size_arrange[self.required_index])
         for image_name in image_list:
             file_processor = FileProcessor()
             file_size, md5 = file_processor.get_file_info(image_path+image_name)
@@ -222,7 +223,7 @@ class Client(threading.Thread):
             receive_packet = sock.recv(BUFFER_SIZE)
             print(receive_packet)
             
-            # transfer_latency = 2837/(self.size_arrange[self.required_index]*1000)
+            
             sent_size = 0
 
             # Cut the file to pieces
@@ -237,19 +238,13 @@ class Client(threading.Thread):
                     sent_size += send_size
                     # print(send_size)
                 img.close()
-            
-            # self.required_index += 1
+        
             # Run the send scheduler
             print("[Client] sending image {}...".format(image_name))
             send_scheduler = SendScheduler()
             send_thread = threading.Thread(target=send_scheduler.run, args=(sock,send_files,))
-            sleep_latency = len(send_files)*0.02
             send_thread.start()
-            # time.sleep(len(send_files))
-            # sleep_latency = len(send_files)*0.02
-            # print(len(send_files))
-            # print(sleep_latency)
-            time.sleep(3)
+            time.sleep(len(send_files))
             send_scheduler.terminate()
             print("[Client] Send finished.")
 
@@ -263,17 +258,13 @@ class Client(threading.Thread):
         # Receive the result from the server
         computing_latency = 0
         for i in range(image_num):
-            # print("Receiving")
             imgResult = sock.recv(BUFFER_SIZE)
-            # print("Received")
             imgName, result, delta_time = imgResult.decode().split("||")
             computing_latency += float(delta_time)
-            # print("Sending")
             sock.send(b"OK")
-            # print("Sended")
             print("{}: {}\n----".format(imgName,result))
         
-        transfer_latency = 128568/(self.size_arrange[self.required_index]*1000*8)
+        transfer_latency = 2873/(self.size_arrange[self.required_index]*1000)
         self.required_index += 1
         sock.close()
         print("Transfer Latency: ", transfer_latency)
@@ -283,13 +274,13 @@ class Client(threading.Thread):
 
 if __name__ == '__main__':
     print("[Client] Test start...")
-    # ip = "127.0.0.1" # Local
+    ip = "127.0.0.1" # Local
     # ip = "192.168.1.101" # Jetson
     # ip = "192.168.26.66" # Server
-    # ip = "192.168.1.150" # Desktop Tao
+    # ip = "192.168.1.151" # Desktop Tao
     # ip = "192.168.1.106" # Desktop En
     # ip = "192.168.1.169" # Desktop Xgw
-    ip = "192.168.1.199" # Desktop LK
+    # ip = "192.168.1.199" # Desktop LK
     port = 50000
     client = Client()
     client.run(ip, port)

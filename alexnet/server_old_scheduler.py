@@ -15,7 +15,7 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 BUFFER_SIZE = 1200
 HEAD_STRUCT = '128sIqi32xs'
-HEAD_INFO = 'fi'
+HEAD_INFO = 'fii'
 info_size = struct.calcsize(HEAD_STRUCT)
 
 ###################
@@ -35,10 +35,10 @@ class FileProcessor():
         file_name = file_name[:file_name_len]
         return file_name.decode(), file_size, required_index, md5
 
-    def get_local_info(self):
+    def get_local_info(self, required_index):
         cpu_percent = psutil.cpu_percent(interval = None)
         conn_type = 1
-        local_info = struct.pack(HEAD_INFO, cpu_percent, conn_type)
+        local_info = struct.pack(HEAD_INFO, cpu_percent, conn_type, required_index)
         return local_info
 
 ###################
@@ -55,6 +55,7 @@ class Server(threading.Thread):
         with open("tram_bandwidth.txt","r") as ulFile:
             self.size_arrange = list(int(float(ul)/8) for ul in ulFile.readlines())
             ulFile.close()
+        self.required_index = 0
 
     ## Configure the alexNet and load the pre-trained model
     def load_model(self):
@@ -92,7 +93,7 @@ class Server(threading.Thread):
         # "File transfer": Transfering process
         print(packet_receive)
         if packet_receive.decode() == "[Client] Resource query..":
-            local_info = self.file_processor.get_local_info()
+            local_info = self.file_processor.get_local_info(self.required_index)
             time.sleep(self.probing_time)
             sock.send(local_info)
         elif packet_receive.decode() == "[Client] File transfer...":
@@ -117,6 +118,7 @@ class Server(threading.Thread):
                 print("S: Receiving image {}...".format(file_name))
                 with open(receive_path+'/'+file_name,'wb') as fw:
                     count = 0
+                    print(file_size)
                     # require d_index = 0
                     while received_size < file_size:
                         remained_size = file_size - received_size
@@ -127,11 +129,12 @@ class Server(threading.Thread):
                         # print(len(recv_file))
                         # print(recv_file) 
                         print("[Server][{}kB/s] Receiving file packet {}...".format(require_size, count), end="")
-                        print(len(recv_file))
+                        print(len(recv_file), end="")
                         sock.send(b"[Server] OK.")
                         count += 1
                         received_size += recv_size
                         fw.write(recv_file)
+                        print("*",recv_size, received_size)
                     fw.close()
                 self.required_index += 1
                 print("[Server] Received {} successfully.".format(file_name))
@@ -154,7 +157,9 @@ class Server(threading.Thread):
                 computing_latency = time1 - time0
                 print("Computing latency: ", computing_latency)
                 imgResult = imgName + "||" + result + "||" + str(computing_latency)
+                print("Sending")
                 sock.send(bytes(imgResult.encode('utf-8')))
+                print("Sended")
                 sock.recv(2)
         else:
             print("[Server] Query invalid.")

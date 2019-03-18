@@ -77,17 +77,19 @@ def estimate_value(service_demand, input_data, device_state, current_cost, obser
 
 
 def pick_device(service_demand, input_data, available_device, record_probed_action, device_state, current_cost, observation):
-    count = list()
+    count = {}
     ip = {}
     print("avai_device", available_device)
     for i in range(len(available_device)):
         device = available_device[i][0]
         ip[device] = available_device[i][1]
         if record_probed_action[device] != 1:
-            count = np.append(count, device)
+            count[device] = estimate_value(service_demand, input_data, device_state[device], current_cost, observation, device)
 
-    device = random.sample(list(count), 1)[0]
-    return device, ip[device]
+    final = sorted(count.items(), key=operator.itemgetter(1))
+    print("final", final)
+    device = final[0][0]
+    return device, ip[device], final[0][1]
 
 
 def device_state_update(device, device_state, comp, comm, connec, probing_cost):
@@ -103,8 +105,8 @@ def device_state_update(device, device_state, comp, comm, connec, probing_cost):
 
 
 def device_info():
-    service_amount = 128568# 22696 #b
-    service_size = 128568 # 22696 #b
+    service_amount = 22696 #b
+    service_size = 22696 #b
     capacity = 0.2
     power = 0.9
     lamda_1 = 1
@@ -118,8 +120,7 @@ def catch_list():
                      "192.168.1.199": "d1",
                      "192.168.1.106": "e1",
                      "192.168.1.169": "f1",
-                     "192.168.1.150": "k1"
-                     #  "192.168.1.151": "k1",
+                     "192.168.1.151": "k1",
                      # "127.0.0.1": "l1"
                      })
     # ip_list = dict({"192.168.1.199": "d1",
@@ -132,7 +133,7 @@ def catch_list():
     #     "192.168.1.199",  # Desktop
     #     "127.0.0.1",  # Local
     # ]
-    ip = ["192.168.26.66", "192.168.1.101", "192.168.1.199", "192.168.1.150", "192.168.1.169", "192.168.1.106"]
+    ip = ["192.168.26.66", "192.168.1.101", "192.168.1.199", "192.168.1.151", "192.168.1.169", "192.168.1.106"]
     np.random.shuffle(ip)
     ip_num = len(ip_list)
     newlist = dict({})
@@ -177,7 +178,7 @@ def receive_prob_info_change(observation, service_amount, service_size, comp, co
     elif device == 'j1':
         comden = 1789.033295433326
         maxCPU = 2e9
-        allocated = -0.18164749165106978 * comp + 42.586058387463765
+        allocated = -0.23811474 * comp + 43.41248101
     elif device == 'd1':
         comden = 515.6911086859752
         maxCPU = 3.6e9
@@ -195,7 +196,6 @@ def receive_prob_info_change(observation, service_amount, service_size, comp, co
         maxCPU = 2.4e9
         allocated = -0.4989063 * comp + 64.49022665
     computing_delay = service_amount * comden / (maxCPU * allocated / 100)
-    print("BPBPBP: current Band: ", comm)
     transmission_delay = service_size / (comm*8e3)  # + output_data / self.Dtrans_rate
     delay = computing_delay + transmission_delay
     power_com = transmission_delay * 0.25
@@ -380,9 +380,14 @@ def main():
                             device_ip = type_device[action][i][1]
                             explore = True
                     if not explore:
+                        if np.random.uniform() < 0.9:
+                            device, device_ip, esti_gain = pick_device(service_amount, service_size, type_device[action],
+                                                            record_probed_action, device_state, min_cost, observation)
+                        else:
                             tuple = random.sample(type_device[action], 1)[0]
                             device = tuple[0]
                             device_ip = tuple[1]
+                            esti_gain = estimate_value(service_amount, service_size, device_state[device], current_cost, observation, device)
 
                     print("device", device)
                     record_probed_action[device] = 1
@@ -412,7 +417,8 @@ def main():
                     observation_probing_ = np.append(observation_probing_, a)
                     # store the probing network
                     if not explore:
-                        reward = reward + max(0, a - min_cost)
+                        reward = reward - abs((reward + esti_gain)) + max(0, a - min_cost)
+                    #     reward = reward - abs((reward + esti_gain))
                     RL.store_transition(observation_probing, action, reward, observation_probing_)
                     reserve_optimal_cost[count_action] = current_cost
 
