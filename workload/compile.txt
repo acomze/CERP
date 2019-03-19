@@ -1,0 +1,1 @@
+g++ cpu_load.c -lpthread -lrt -o cpu_load
